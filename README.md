@@ -6,6 +6,24 @@ rooms, your people, and call controls, one click from the bar.
 
 ![Omatuple: the dropdown in a call, and its settings](preview.png)
 
+## Quick start
+
+1. Paste this into a terminal:
+
+   ```bash
+   omarchy plugin add https://github.com/gsottnick/omatuple.git --enable
+   ```
+
+   The Tuple icon appears on the right of your bar.
+2. Click it, then **Install Tuple**. Omatuple downloads Tuple's official Linux
+   client and checks it before installing it.
+3. Click **Sign in**. Your browser opens Tuple's sign-in page; paste the code
+   it gives you back into the dropdown.
+
+That's the whole setup. The marketplace listing marks Omatuple as manual setup
+and shows no install command, because Tuple's client is installed from the
+dropdown rather than by Omarchy.
+
 > [!WARNING]
 > **Sharing your screen crashes Xwayland**, a bug in Tuple's Linux client and
 > Xwayland, not Omatuple. Every X11 app you have open closes (Steam, Zoom,
@@ -78,11 +96,7 @@ Also `share`, `accept`, `join <link>`, `status`, `open`, `close`, and `diagnose`
 
 Omatuple is listed in the
 [Omarchy plugin marketplace](https://plugins.omarchy.org/plugin.html?id=io.github.gsottnick.omatuple).
-Install it from there, or from the terminal:
-
-```bash
-omarchy plugin add https://github.com/gsottnick/omatuple.git --enable
-```
+The listing has no install command; use the one in [Quick start](#quick-start).
 
 The widget lands on the right of the bar. Move it with:
 
