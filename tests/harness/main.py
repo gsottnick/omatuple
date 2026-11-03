@@ -28,7 +28,43 @@ from PySide6.QtCore import Q_ARG, QMetaObject, QObject, Qt, QTimer, QUrl  # noqa
 from PySide6.QtGui import QBitmap, QColor, QGuiApplication, QImage, QPainter, QRegion  # noqa: E402
 from PySide6.QtQml import QJSValue, QQmlApplicationEngine, QQmlEngine, QQmlExpression  # noqa: E402
 
-from qsmock import core, io, wayland  # noqa: E402,F401  (import registers the QML types)
+from qsmock import core, hyprland, io, wayland  # noqa: E402,F401  (imports register the QML types)
+
+
+# Every Quickshell module Commons/Ui may import gets a stub under .qsroot, so a
+# system-wide Quickshell install can't put its real modules on Qt's import path
+# ahead of the qsmock registrations. Two mechanisms resolve an import:
+#   - Python types registered under the module's name (qsmock/core.py, io.py,
+#     wayland.py, hyprland.py), and
+#   - a qmldir that declares at least one type — an empty qmldir alone is not
+#     enough, and PySide6 cannot register a three-segment module name, which is
+#     why Quickshell.Services.Pipewire gets a QML-file singleton below.
+# A missing entry for a module the shell does import is fatal;
+# panel_test.HarnessStubTest keeps this in step with the shell.
+STUB_QUICKSHELL_MODULES = (
+    "Quickshell",
+    "Quickshell.Hyprland",
+    "Quickshell.Io",
+    "Quickshell.Services.Pipewire",
+    "Quickshell.Wayland",
+)
+
+# Extra qmldir lines and files for modules Python cannot register.
+QML_STUBS = {
+    "Quickshell.Services.Pipewire": {
+        "qmldir": "singleton Pipewire 1.0 Pipewire.qml\n",
+        "files": {
+            "Pipewire.qml": (
+                "pragma Singleton\n"
+                "import QtQuick\n"
+                "QtObject {\n"
+                "    // No audio server offscreen: UntypedInput's null case.\n"
+                "    property QtObject defaultAudioSource: null\n"
+                "}\n"
+            )
+        },
+    },
+}
 
 
 def build_import_root(omarchy_shell: Path) -> Path:
@@ -45,12 +81,13 @@ def build_import_root(omarchy_shell: Path) -> Path:
         if link.is_symlink() or link.exists():
             link.unlink()
         link.symlink_to(target)
-    # A system-wide Quickshell install puts its real modules on Qt's import
-    # path; these plugin-less qmldirs win, so the qsmock registrations are used.
-    for module in ("Quickshell", "Quickshell.Io", "Quickshell.Wayland"):
+    for module in STUB_QUICKSHELL_MODULES:
         directory = root.joinpath(*module.split("."))
         directory.mkdir(parents=True, exist_ok=True)
-        (directory / "qmldir").write_text(f"module {module}\n")
+        stub = QML_STUBS.get(module, {})
+        for name, content in stub.get("files", {}).items():
+            (directory / name).write_text(content)
+        (directory / "qmldir").write_text(f"module {module}\n" + stub.get("qmldir", ""))
     return root
 
 
@@ -125,11 +162,18 @@ def snapshot(plugin: QObject, store: QObject) -> dict:
     page = plugin.findChild(QObject, "settingsPage")
     state["panel"]["settingsPage"] = bool(page and page.property("visible"))
     keyboard = plugin.findChild(QObject, "keyboardPanel")
-    state["panel"]["contentHeight"] = read(keyboard, "contentHeight") if keyboard else None
+    state["panel"]["contentHeight"] = (
+        read(keyboard, "contentHeight") if keyboard else None
+    )
     view = plugin.findChild(QObject, "pageView")
-    state["panel"]["pageView"] = {
-        key: read(view, key) for key in ("visible", "height", "contentHeight", "contentY")
-    } if view else None
+    state["panel"]["pageView"] = (
+        {
+            key: read(view, key)
+            for key in ("visible", "height", "contentHeight", "contentY")
+        }
+        if view
+        else None
+    )
     bar = plugin.property("bar")
     state["barWrites"] = read(bar, "writes", []) if bar is not None else []
     state["detached"] = core.DETACHED
@@ -173,17 +217,20 @@ def apply_step(step: str, plugin: QObject, store: QObject, harness=None):
         "install": (store, "install"),
         "diagnose": (store, "diagnose"),
     }
-    panel_calls = {"share-panel": "shareFromPanel()", "share-anyway": "shareAnyway()",
-                   "share-dont-warn": "shareAndStopWarning()", "share-help": "togglePage('help')",
-                   "back": "back()", "page-end": "scrollPage(1000)",
-                   "settings": "togglePage('settings')"}
+    panel_calls = {
+        "share-panel": "shareFromPanel()",
+        "share-anyway": "shareAnyway()",
+        "share-dont-warn": "shareAndStopWarning()",
+        "share-help": "togglePage('help')",
+        "back": "back()",
+        "page-end": "scrollPage(1000)",
+        "settings": "togglePage('settings')",
+    }
     if name in panel_calls:
         # QML functions on the panel aren't invokable from Python attributes or
         # the metaobject; evaluate in the panel's own QML context.
         call = panel_calls[name]
-        expression = QQmlExpression(
-            QQmlEngine.contextForObject(plugin), plugin, call
-        )
+        expression = QQmlExpression(QQmlEngine.contextForObject(plugin), plugin, call)
         expression.evaluate()
         if expression.hasError():
             print(expression.error(), file=sys.stderr)
@@ -215,7 +262,9 @@ def apply_step(step: str, plugin: QObject, store: QObject, harness=None):
     elif name == "pick":
         control, _, value = argument.partition("=")
         QMetaObject.invokeMethod(
-            plugin.findChild(QObject, control + "Group"), "changed", Q_ARG("QString", value)
+            plugin.findChild(QObject, control + "Group"),
+            "changed",
+            Q_ARG("QString", value),
         )
     elif name == "wait":
         pass
@@ -339,8 +388,10 @@ def main() -> int:
             if args.panel_shot:
                 # The dropdown draws inside a transparent full-screen window,
                 # the tallest one: keep only its opaque part.
-                window = max((w for w in QGuiApplication.topLevelWindows() if w.isVisible()),
-                             key=lambda w: w.height())
+                window = max(
+                    (w for w in QGuiApplication.topLevelWindows() if w.isVisible()),
+                    key=lambda w: w.height(),
+                )
                 grab = window.grabWindow()
                 box = QRegion(QBitmap.fromImage(grab.createAlphaMask())).boundingRect()
                 grab.copy(box).save(args.panel_shot)
