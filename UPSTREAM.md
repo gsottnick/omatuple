@@ -3,6 +3,12 @@
 Bugs outside Omatuple that we are waiting on. One row per problem; drafts for
 each upstream follow the table. File links land here once reports are filed.
 
+Processed against Tuple for Linux v2026_11_02.0 on 2026-11-02 (issue #35): the
+CLI surface and the daemon API Omatuple uses are unchanged. No live call was
+available this pass (the second machine was offline), so the share-time
+behaviors below — the Xwayland crash, annotations, the portal-picker freeze —
+were not re-tested against the new client.
+
 | Problem | What the user sees | Who must fix it | Status | Omatuple's workaround |
 | --- | --- | --- | --- | --- |
 | Xwayland segfaults (null deref) the moment Tuple starts a screen share | Every X11 app closes at once; the session and Wayland apps survive. Verified: both shares started on Hyprland on 2026-10-29 crashed Xwayland in the same second; it also crashed once with Tuple idle | X.org/Xwayland (freedesktop GitLab), and Tuple's Linux client for what it sends | draft below | Omatuple warns before every share, with a "Why does sharing break my desktop?" help section. **Remove when fixed:** delete everything tagged `XWAYLAND-SHARE-WORKAROUND` in the code and tests, and the `warnBeforeSharing` setting in `manifest.json` |
