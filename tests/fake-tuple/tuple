@@ -1,5 +1,5 @@
 #!/bin/sh
-# A scripted stand-in for Tuple for Linux v2026_10_23.0, for reaching states a
+# A scripted stand-in for Tuple for Linux v2026_11_02.0, for reaching states a
 # test cannot reach without a real account (signed in, in a call, sharing).
 #
 # Output is the sanitized fixtures under tests/fixtures/, which are the real

@@ -1,8 +1,12 @@
 // Parser tests for Model.js.
 //
-// The JSON fixtures are real output from Tuple for Linux v2026_10_23.0 with
-// every name, email, id, slug and URL replaced by fake values. login.txt is
-// rebuilt from the strings in that binary, not captured from a live sign-in.
+// The JSON fixtures are real output from Tuple for Linux with every name,
+// email, id, slug and URL replaced by fake values. state-idle.json and
+// help.txt were re-captured from v2026_11_02.0; the call-, share- and
+// busy-state fixtures still come from the v2026_10_23.0 capture session
+// (those states need a live call). help.txt is byte-identical across both
+// releases; login.txt is rebuilt from the strings in that binary, not
+// captured from a live sign-in.
 
 import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
@@ -36,7 +40,7 @@ test("a signed-in idle state carries the user and no call", () => {
   assert.equal(s.loggedIn, true)
   assert.equal(s.user.name, "Ada")
   assert.equal(s.inCall, false)
-  assert.equal(s.version, "v2026_10_23.0")
+  assert.equal(s.version, "v2026_11_02.0")
   assert.equal(s.updateVersion, "")
 })
 
