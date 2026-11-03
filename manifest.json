@@ -2,10 +2,10 @@
   "schemaVersion": 1,
   "id": "io.github.gsottnick.omatuple",
   "name": "Omatuple",
-  "version": "2.6.2",
+  "version": "2.6.3",
   "author": "Gavin Sottnick",
   "license": "MIT",
-  "description": "Omatuple installs Tuple and runs pair programming from the Omarchy bar: rooms, people, and call controls in one dropdown.",
+  "description": "Omatuple installs Tuple and runs pair programming from the Omarchy bar: rooms, people, and call controls in one dropdown. Known issue: starting a screen share crashes X11 apps on Omarchy (an upstream bug); the widget warns before every share.",
   "kinds": [
     "bar-widget"
   ],
