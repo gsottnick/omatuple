@@ -16,6 +16,7 @@ singleton, which shadows Omarchy's in this harness (not in Quickshell).
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -622,6 +623,42 @@ class PanelTest(unittest.TestCase):
 def has_system_gi() -> bool:
     check = ["/usr/bin/python3", "-c", "from gi.repository import Gio"]
     return Path(check[0]).exists() and subprocess.run(check, capture_output=True).returncode == 0
+
+
+class HarnessStubTest(unittest.TestCase):
+    """qsmock must stub every Quickshell module Commons/Ui import.
+
+    main.py's empty qmldirs keep a system Quickshell's real modules off Qt's
+    import path. A shell update that adds an import without a stub kills every
+    QML load (this happened when Omarchy's Commons gained Quickshell.Hyprland).
+    """
+
+    def test_stubs_cover_every_quickshell_import(self):
+        # Parse the constant out of main.py rather than import it: importing
+        # would pull in PySide6 and register qsmock's QML types mid-suite.
+        source = (HERE / "harness" / "main.py").read_text()
+        match = re.search(r"STUB_QUICKSHELL_MODULES\s*=\s*\((.*?)\)", source, re.DOTALL)
+        self.assertIsNotNone(match, "STUB_QUICKSHELL_MODULES vanished from main.py")
+        stubs = set(re.findall(r'"([^"]+)"', match.group(1)))
+        imports = set()
+        # Only what build_import_root exposes goes through the stubbed import
+        # path: Commons and Ui (the rest of the shell — services/, plugins/ —
+        # is never loaded by the harness).
+        for directory in (OMARCHY / "Commons", OMARCHY / "Ui"):
+            for qml in directory.rglob("*.qml"):
+                imports.update(
+                    re.findall(
+                        r"import (Quickshell[A-Za-z.]*)", qml.read_text(errors="replace")
+                    )
+                )
+        self.assertTrue(imports, f"no Quickshell imports found under {OMARCHY}")
+        uncovered = imports - stubs
+        self.assertEqual(
+            uncovered,
+            set(),
+            f"unstubbed Quickshell imports in {OMARCHY}: {sorted(uncovered)} — "
+            "add them to STUB_QUICKSHELL_MODULES in tests/harness/main.py",
+        )
 
 
 @unittest.skipUnless(shutil.which("dbus-run-session") and has_system_gi(),

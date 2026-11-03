@@ -112,6 +112,7 @@ class Process(QObject):
         self._stdout = None
         self._stderr = None
         self._working_directory = ""
+        self._environment = {}
         self._proc = None
         self._stdin_enabled = False
         self._piped = None
@@ -123,7 +124,9 @@ class Process(QObject):
         self._command = [str(part) for part in (value or [])]
         self.commandChanged.emit()
 
-    command = Property("QVariantList", _get_command, _set_command, notify=commandChanged)
+    command = Property(
+        "QVariantList", _get_command, _set_command, notify=commandChanged
+    )
 
     def _get_stdout(self):
         return self._stdout
@@ -148,6 +151,15 @@ class Process(QObject):
         self._working_directory = value
 
     workingDirectory = Property(str, _get_wd, _set_wd)
+
+    def _get_environment(self):
+        return self._environment
+
+    def _set_environment(self, value):
+        self._environment = dict(value or {})
+
+    # Variables set on top of the inherited environment, like Quickshell's.
+    environment = Property("QVariantMap", _get_environment, _set_environment)
 
     def _get_running(self):
         return self._running
@@ -176,7 +188,9 @@ class Process(QObject):
             elif self._proc is not None:
                 self._proc.closeWriteChannel()
 
-    stdinEnabled = Property(bool, _get_stdin_enabled, _set_stdin_enabled, notify=stdinEnabledChanged)
+    stdinEnabled = Property(
+        bool, _get_stdin_enabled, _set_stdin_enabled, notify=stdinEnabledChanged
+    )
 
     @Slot(str)
     def write(self, data):
@@ -210,6 +224,10 @@ class Process(QObject):
         self._proc.setArguments(self._command[1:])
         if self._working_directory:
             self._proc.setWorkingDirectory(self._working_directory)
+        if self._environment:
+            env = {k: v for k, v in os.environ.items()}
+            env.update({str(k): str(v) for k, v in self._environment.items()})
+            self._proc.setEnvironment(env)
         self._proc.readyReadStandardOutput.connect(self._drain_stdout)
         self._proc.readyReadStandardError.connect(self._drain_stderr)
         self._proc.finished.connect(self._on_finished)
@@ -297,6 +315,7 @@ class FileView(QObject):
 
     watchChanges = _flag("_watch_changes", False)
     printErrors = _flag("_print_errors", True)
+    blockLoading = _flag("_block", False)
     blockLoadingUntilLoaded = _flag("_block", False)
     del _flag
 
@@ -320,6 +339,9 @@ class FileView(QObject):
 class IpcHandler(QObject):
     """Accepts the declaration so panels load; the harness calls methods directly."""
 
+    targetChanged = Signal()
+    enabledChanged = Signal()
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self._target = ""
@@ -329,17 +351,21 @@ class IpcHandler(QObject):
         return self._target
 
     def _set_target(self, value):
-        self._target = value
+        if value != self._target:
+            self._target = value
+            self.targetChanged.emit()
 
-    target = Property(str, _get_target, _set_target)
+    target = Property(str, _get_target, _set_target, notify=targetChanged)
 
     def _get_enabled(self):
         return self._enabled
 
     def _set_enabled(self, value):
-        self._enabled = value
+        if value != self._enabled:
+            self._enabled = value
+            self.enabledChanged.emit()
 
-    enabled = Property(bool, _get_enabled, _set_enabled)
+    enabled = Property(bool, _get_enabled, _set_enabled, notify=enabledChanged)
 
 
 @QmlElement
@@ -362,7 +388,9 @@ class Socket(QObject):
         self._socket.connected.connect(lambda: self.connectedChanged.emit())
         self._socket.disconnected.connect(lambda: self._on_disconnected())
         self._socket.readyRead.connect(lambda: self._on_ready_read())
-        self._socket.errorOccurred.connect(lambda e: self.error.emit(int(e.value) if hasattr(e, "value") else int(e)))
+        self._socket.errorOccurred.connect(
+            lambda e: self.error.emit(int(e.value) if hasattr(e, "value") else int(e))
+        )
 
     def _get_path(self):
         return self._path
